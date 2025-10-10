@@ -9,7 +9,7 @@ from zipfile import ZipFile
 from io import BytesIO
 
 # --- Page config ---
-st.set_page_config(page_title="SmartLoad-Football · Dashboard (Final Demo EN + 中文建议)", layout="wide")
+st.set_page_config(page_title="SmartLoad-Football · Dashboard (EN + 中文建议)", layout="wide")
 matplotlib.rcParams["font.sans-serif"] = ["DejaVu Sans", "Arial", "Liberation Sans"]
 matplotlib.rcParams["axes.unicode_minus"] = False
 
@@ -166,10 +166,10 @@ def render_advice_text(ctx):
     )
     return text, reasons, plan
 
-# --- Layout ---
+# ============= Layout =============
 left, right = st.columns([1.1, 1.3], gap="large")
 
-# ===== Left: Team FRI heatmap =====
+# ===== Left: Team FRI heatmap + 个体建议（移动到这里） =====
 with left:
     st.subheader("Team FRI Heatmap")
     fri = df.pivot_table(index="player_id",
@@ -187,7 +187,31 @@ with left:
     else:
         st.warning("No FRI data to visualize.")
 
-# ===== Right: Individual trends =====
+    # ---- 新增：热力图下方的个体建议（球员 + 日期 选择）----
+    st.markdown("### 个体指导建议（热力图下方）")
+    all_dates = sorted(df["date"].dt.date.dropna().unique().tolist())
+    pid_adv = st.selectbox("选择球员（建议）", sorted(df["player_id"].unique()), index=0, key="adv_pid")
+    date_adv = st.selectbox("选择日期（建议）", all_dates, index=len(all_dates)-1,
+                            format_func=lambda d: d.strftime("%Y-%m-%d"), key="adv_date")
+
+    sub_adv = df[(df["player_id"] == pid_adv) & (df["date"].dt.date == date_adv)]
+    if sub_adv.empty:
+        st.info("该球员在该日期没有数据。请更换球员或日期。")
+    else:
+        row = sub_adv.iloc[0].to_dict()
+        ctx = {
+            "FRI": row.get("FRI"),
+            "band": row.get("band", "green"),
+            "ACWR_7_28": row.get("ACWR_7_28"),
+            "HRV_ratio": row.get("HRV_ratio"),
+            "CMJ_change_pct": row.get("CMJ_change_pct"),
+            "sRPE_7d": row.get("sRPE_7d"),
+            "minutes_last_game": row.get("minutes_last_game"),
+        }
+        advice_text, _, _ = render_advice_text(ctx)
+        st.code(advice_text, language="text")
+
+# ===== Right: Individual trends（保持不变，移除了右侧旧的建议块） =====
 def _xtick_format(ax, dates):
     n = len(dates)
     if n <= 8:
@@ -202,7 +226,7 @@ def _xtick_format(ax, dates):
 with right:
     st.subheader("Individual Trends (lines + markers + thresholds)")
     pids = sorted(df["player_id"].unique())
-    pid = st.selectbox("Select player", pids, index=0)
+    pid = st.selectbox("Select player (charts)", pids, index=0)
     sub = df[df["player_id"] == pid].sort_values("date").reset_index(drop=True)
     dates = sub["date"].dt.date.tolist()
 
@@ -231,30 +255,13 @@ with right:
     ax2.set_xlabel("Date"); ax2.set_ylabel("FRI index")
     st.pyplot(fig2, use_container_width=True)
 
-    # --- 个体指导建议（所选球员的“最新日期”） ---
-    st.markdown("### 个体指导建议（所选球员 & 最新日期）")
-    latest_date = sub["date"].max().date()
-    last_row = sub[sub["date"].dt.date == latest_date].iloc[0].to_dict()
-    ctx = {
-        "FRI": last_row.get("FRI"),
-        "band": last_row.get("band", "green"),
-        "ACWR_7_28": last_row.get("ACWR_7_28"),
-        "HRV_ratio": last_row.get("HRV_ratio"),
-        "CMJ_change_pct": last_row.get("CMJ_change_pct"),
-        "sRPE_7d": last_row.get("sRPE_7d"),
-        "minutes_last_game": last_row.get("minutes_last_game"),
-    }
-    advice_text, _, _ = render_advice_text(ctx)
-    st.code(advice_text, language="text")
-
 # ===== Bottom: alert list (select date + download + export advice) =====
 st.subheader("Yellow/Red Alert List (by date)")
-all_dates = sorted(df["date"].dt.date.dropna().unique().tolist())
-sel_date = st.selectbox("Select date", all_dates, index=len(all_dates)-1,
+all_dates_tbl = sorted(df["date"].dt.date.dropna().unique().tolist())
+sel_date = st.selectbox("Select date (table)", all_dates_tbl, index=len(all_dates_tbl)-1,
                         format_func=lambda d: d.strftime("%Y-%m-%d"))
 day_df = df[df["date"].dt.date == sel_date].copy()
 
-# Advice columns for export (中文)
 def advice_for_row(row):
     ctx = {
         "FRI": row.get("FRI"),
@@ -288,11 +295,9 @@ if alerts.empty:
     st.info("No yellow/red alerts for this date. Try other dates or adjust thresholds.")
 else:
     st.dataframe(alerts.drop(columns=["advice_text"]), use_container_width=True, height=260)
-    # CSV（中文字段）
     csv_bytes = alerts.drop(columns=["advice_text"]).to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button("下载当日预警清单（CSV）", data=csv_bytes,
                        file_name=f"alerts_{sel_date}.csv", mime="text/csv")
-    # 每人一份 TXT（中文），打包 ZIP
     mem = BytesIO()
     with ZipFile(mem, "w") as zf:
         for _, r in alerts.iterrows():
