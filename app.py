@@ -2,6 +2,8 @@
 import os
 import io
 import json
+import urllib.request
+import pathlib
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -12,49 +14,56 @@ import matplotlib.font_manager as fm
 # -----------------------------------------------------------------------------
 # 页面配置
 # -----------------------------------------------------------------------------
-st.set_page_config(page_title="SmartLoad-Football · 管理后台 (Final Demo v4)", layout="wide")
+st.set_page_config(page_title="SmartLoad-Football · 管理后台 (Final Demo v5)", layout="wide")
 
 # -----------------------------------------------------------------------------
-# 中文字体注册（关键改动）
-# - 随项目携带 fonts/NotoSansSC-Regular.otf 或 fonts/SimHei.ttf
-# - 找到就 addfont，并把 rcParams 的中文无衬线优先级放在最前
-# - 找不到则回退到系统常见中文字体与 DejaVu Sans
+# 自动加载中文字体（无需上传）
 # -----------------------------------------------------------------------------
-FONT_CANDIDATES = [
-    "fonts/NotoSansSC-Regular.otf",  # 推荐：思源黑体
-    "fonts/SimHei.ttf",              # 备选：黑体
-    "fonts/MicrosoftYaHei.ttf",      # 若你项目里放了也会被加载
-]
-loaded_font_names = []  # 记录成功加入的字体家族名
-
-for fp in FONT_CANDIDATES:
-    if os.path.exists(fp):
-        try:
-            fm.fontManager.addfont(fp)
-            # 取出字体家族名（matplotlib 会识别文件内的 family）
+def ensure_chinese_font():
+    # 先尝试项目内 fonts 目录
+    candidates = [
+        "fonts/NotoSansSC-Regular.otf",
+        "fonts/SimHei.ttf",
+        "fonts/MicrosoftYaHei.ttf",
+    ]
+    for fp in candidates:
+        if os.path.exists(fp):
             try:
-                prop = fm.FontProperties(fname=fp)
-                family = prop.get_name()
+                fm.fontManager.addfont(fp)
+                fam = fm.FontProperties(fname=fp).get_name()
+                return [fam]
             except Exception:
-                # 若无法解析家族名，就按常见名字猜测
-                family = "Noto Sans SC" if "NotoSansSC" in fp else (
-                         "SimHei" if "SimHei" in fp else "Microsoft YaHei")
-            loaded_font_names.append(family)
-        except Exception:
-            pass
+                pass
 
-# 将本地字体（若有）放在优先级最前，后面是系统常见中文字体 & 兜底
-matplotlib.rcParams["font.sans-serif"] = loaded_font_names + [
+    # 若本地无字体则自动下载思源黑体 Regular
+    url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf"
+    cache_dir = pathlib.Path("./.cache_fonts")
+    cache_dir.mkdir(exist_ok=True)
+    cached = cache_dir / "NotoSansSC-Regular.otf"
+    if not cached.exists():
+        try:
+            urllib.request.urlretrieve(url, str(cached))
+        except Exception:
+            return []
+    try:
+        fm.fontManager.addfont(str(cached))
+        fam = fm.FontProperties(fname=str(cached)).get_name()
+        return [fam]
+    except Exception:
+        return []
+
+loaded = ensure_chinese_font()
+matplotlib.rcParams["font.sans-serif"] = loaded + [
     "Noto Sans SC", "SimHei", "Microsoft YaHei", "Source Han Sans SC",
     "Heiti SC", "Arial Unicode MS", "DejaVu Sans"
 ]
-matplotlib.rcParams["axes.unicode_minus"] = False  # 负号正常显示
+matplotlib.rcParams["axes.unicode_minus"] = False
 
 # -----------------------------------------------------------------------------
 # 标题
 # -----------------------------------------------------------------------------
-st.title("SmartLoad-Football · 管理后台 (Final Demo v4)")
-st.caption("团队热力图、个体趋势（折线+阈值虚线+圆点）、黄/红灯预警清单（中文图例 & 更清晰坐标）")
+st.title("SmartLoad-Football · 管理后台 (Final Demo v5)")
+st.caption("团队热力图、个体趋势（折线+阈值虚线+圆点）、黄/红灯预警清单（自动加载中文字体）")
 
 # -----------------------------------------------------------------------------
 # 侧栏：数据上传与阈值
@@ -77,7 +86,6 @@ def read_df(uploaded_file) -> pd.DataFrame:
     name = uploaded_file.name.lower()
     if name.endswith(".csv"):
         data = uploaded_file.read()
-        # 先尝试 UTF-8-SIG，失败再回退 GBK（Excel 常见）
         for enc in ("utf-8-sig", "gbk"):
             try:
                 return pd.read_csv(io.BytesIO(data), encoding=enc)
@@ -155,10 +163,9 @@ with left:
         st.warning("没有可视化的数据。")
 
 # -----------------------------------------------------------------------------
-# 右侧：个体趋势（折线 + 圆点 + 阈值虚线）
+# 右侧：个体趋势（折线 + 阈值虚线）
 # -----------------------------------------------------------------------------
 def _xtick_format(ax, dates):
-    """将横轴日期抽稀并旋转，最多显示约 8 个刻度。"""
     n = len(dates)
     if n <= 8:
         idx = list(range(n))
@@ -204,7 +211,7 @@ with right:
     st.pyplot(fig2, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 底部：预警清单（可选日期 + 下载）
+# 底部：预警清单
 # -----------------------------------------------------------------------------
 st.subheader("当日黄/红灯预警清单")
 all_dates = sorted(df["date"].dt.date.dropna().unique().tolist())
