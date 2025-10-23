@@ -23,9 +23,9 @@ with st.sidebar:
     file = st.file_uploader("Upload CSV or JSON (array)", type=["csv", "json"])
     st.markdown("---")
     st.subheader("Thresholds")
-    acwr_th = st.number_input("ACWR risk threshold", value=1.50, step=0.05, format="%.2f")
-    y_th = st.number_input("FRI yellow threshold (≥)", value=0.50, step=0.05, format="%.2f")
-    r_th = st.number_input("FRI red threshold (≥)", value=0.70, step=0.05, format="%.2f")
+    acwr_th = st.number_input("ACWR risk threshold", value=0.856, step=0.05, format="%.2f")
+    y_th = st.number_input("FRI yellow threshold (≥)", value=0.241, step=0.05, format="%.2f")
+    r_th = st.number_input("FRI red threshold (≥)", value=0.563, step=0.05, format="%.2f")
     recompute = st.checkbox("Recompute band from FRI thresholds (ignore original band)", value=False)
     st.caption("Tip: Enable if your data has no band column or uses different thresholds.")
 
