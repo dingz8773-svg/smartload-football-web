@@ -24,7 +24,7 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("Thresholds")
     acwr_th = st.number_input("ACWR risk threshold", value=0.856, step=0.05, format="%.2f")
-    y_th = st.number_input("FRI yellow threshold (≥)", value=0.241, step=0.05, format="%.2f")
+    y_th = st.number_input("FRI yellow threshold (≥)", value=0.121, step=0.05, format="%.2f")
     r_th = st.number_input("FRI red threshold (≥)", value=0.311, step=0.05, format="%.2f")
     recompute = st.checkbox("Recompute band from FRI thresholds (ignore original band)", value=False)
     st.caption("Tip: Enable if your data has no band column or uses different thresholds.")
